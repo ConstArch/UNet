@@ -54,7 +54,7 @@ class UNet(torch.nn.Module):
         self.dec2 = UNetDecoderBlock( 256, 128)
         self.dec1 = UNetDecoderBlock( 128,  64)
         
-        self.outp = torch.nn.Conv2d(64, n_classes)
+        self.outp = torch.nn.Conv2d(64, n_classes, kernel_size=1)
         
     # end UNet.__init__
     
