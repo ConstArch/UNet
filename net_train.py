@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing      import Optional
 
 import numpy as np
 import torch
@@ -13,8 +14,8 @@ class NetTrainer:
     
     loss_applier      : lapp.AbstractLossApplier
     optimizer_factory : optf.AbstractOptimizerFactory
-    iteration_logger  : il.IterationLogger
-    epoch_logger      : il.IterationLogger
+    iteration_logger  : Optional[il.IterationLogger] = None
+    epoch_logger      : Optional[il.IterationLogger] = None
     
     def train(self, net, dataloader, n_epochs):
         
