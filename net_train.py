@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-import loss_applyinng as lapp
+import loss_applying as lapp
 import optim_factory as optf
 import iter_logging as il
 
