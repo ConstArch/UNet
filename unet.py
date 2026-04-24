@@ -55,8 +55,6 @@ class UNet(torch.nn.Module):
         self.dec1 = UNetDecoderBlock( 128,  64)
         
         self.outp = torch.nn.Conv2d(64, n_classes, kernel_size=1)
-        
-    # end UNet.__init__
     
     def forward(self, arg):
         
@@ -73,7 +71,3 @@ class UNet(torch.nn.Module):
         res = self.dec1(u1, r1)
         
         return self.outp(res)
-        
-    # end UNet.forward
-    
-# end UNet
