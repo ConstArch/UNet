@@ -1,47 +1,11 @@
 import numpy as np
 import cv2
 import torch
+import torchvision
 
 
 import net_training as nt
 import unet
-
-
-class ImageSegmentDataset(torch.utils.data.Dataset):
-    
-    def __init__(self, image_paths, seg_map_paths, image_height, image_width):
-        
-        if len(image_paths) != len(seg_map_paths):
-            raise ValueError(
-                'len(image_paths) != len(seg_map_paths)\n'
-                'where\n'
-                f'\t{len(image_paths)=}\n'
-                f'\t{len(seg_map_paths)=}'
-            )
-        
-        self.image_paths   = image_paths
-        self.seg_map_paths = seg_map_paths
-        self.image_height  = image_height
-        self.image_width   = image_width
-    
-    def __len__(self):
-        return len(self.image_paths)
-    
-    def __getitem__(self, index):
-        
-        image = cv2.resize(
-            cv2.imread(self.image_paths[index]),
-            dsize = (self.image_width, self.image_height)
-        )
-        seg_map = cv2.resize(
-            cv2.imread(self.seg_map_paths[index], cv2.IMREAD_GRAYSCALE),
-            dsize = (self.image_width, self.image_height)
-        )
-        
-        image = image.transpose((2, 0, 1)).astype(np.float32)
-        seg_map = (seg_map - 1).astype(np.int64)
-        
-        return torch.tensor(image), torch.tensor(seg_map)
 
 
 class CrossEntropyLossApplier(nt.AbstractLossApplier):
@@ -74,11 +38,47 @@ class AdamOptimizerFactory(nt.AbstractOptimizerFactory):
 
 def main():
     
-    with open('Oxford pets/Segmentation/annotations/trainval.txt') as fin:
-        train_names = [line.split()[0] for s in fin.readlines()]
+    device = torch.device('cuda')
     
-    with open('Oxford pets/Segmentation/annotations/test.txt') as fin:
-        test_names = [line.split()[0] for s in fin.readlines()]
+    net = unet.UNet(output_channel_count=3, min_channel_shape=(20, 25)).to(device)
+    
+    image_transform = torchvision.transforms.Compose(
+        [
+            torchvision.transforms.Resize(net.input_shape),
+            torchvision.transforms.ToTensor()
+        ]
+    )
+    
+    seg_map_transform = torchvision.transforms.Compose(
+        [
+            torchvision.transforms.Resize(net.output_shape),
+            torchvision.transforms.ToTensor()
+        ]
+    )
+    
+    trainval_dataset = torchvision.datasets.OxfordIIITPet(
+        root='./data',
+        split='trainval',
+        target_types='segmentation',
+        transform=image_transform,
+        target_transform=seg_map_transform,
+        download=True
+    )
+    
+    trainval_dataloader = torch.utils.data.DataLoader(batch_size=64, shuffle=True, pin_memory=True)
+    
+    training_result = nt.NetTrainer(
+        loss_applier=CrossEntropyLossApplier(),
+        optimizer_factory=AdamOptimizerFactory(),
+        epoch_logger=nt.IterationLogger(
+            message_sender=lambda x: print(f'epoch {x} completed'),
+            duration=1
+        )
+    ).train(
+        net=net,
+        dataloader=trainval_dataloader,
+        n_epochs=10
+    )
 
 
 if __name__ == '__main__':
