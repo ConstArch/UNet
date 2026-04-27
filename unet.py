@@ -29,18 +29,32 @@ class UNetDecoderBlock(torch.nn.Module):
     
     def __init__(self, in_chan, out_chan):
         super().__init__()
-        self.up   = torch.nn.ConvTranspose2d( in_chan, out_chan, kernel_size=2)
+        self.up   = torch.nn.ConvTranspose2d(in_chan, out_chan, kernel_size=2, stride=2)
         self.conv = UNetDoubleConvolutionBlock(2 * out_chan, out_chan)
     
     def forward(self, arg, internal):
-        return self.conv(torch.cat([self.up(arg), internal], dim=2))
+        pad_height = internal.shape[-2] // 2 - arg.shape[-2]
+        pad_width  = internal.shape[-1] // 2 - arg.shape[-1]
+        pad = (pad_width, pad_width, pad_height, pad_height)
+        return self.conv(torch.cat([torch.nn.functional.pad(self.up(arg), pad=pad), internal], dim=-3))
 
 
 class UNet(torch.nn.Module):
     
-    def __init__(self, n_classes):
+    def __init__(self, output_channel_count, min_channel_shape):
         
         super().__init__()
+        
+        u4_shape = torch.tensor(min_channel_shape)
+        
+        r4_shape = 2 * (u4_shape + 4)
+        
+        r3_shape = 2 * (r4_shape + 4)
+        r2_shape = 2 * (r3_shape + 4)
+        r1_shape = 2 * (r2_shape + 4)
+        
+        self.input_shape  = tuple((r1_shape + 4).tolist())
+        self.output_shape = tuple((r1_shape - 4).tolist())
         
         self.enc1 = UNetEncoderBlock(  3,  64)
         self.enc2 = UNetEncoderBlock( 64, 128)
@@ -54,7 +68,7 @@ class UNet(torch.nn.Module):
         self.dec2 = UNetDecoderBlock( 256, 128)
         self.dec1 = UNetDecoderBlock( 128,  64)
         
-        self.outp = torch.nn.Conv2d(64, n_classes, kernel_size=1)
+        self.outp = torch.nn.Conv2d(64, output_channel_count, kernel_size=1)
     
     def forward(self, arg):
         
