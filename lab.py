@@ -39,19 +39,31 @@ class AdamOptimizerFactory(nt.AbstractOptimizerFactory):
 
 @dataclass
 class PILImageToTensorTransform:
-
-    result_dtype  : torch.dtype
-    result_shape  : Optional[tuple[int, int]] = None
-    result_device : Optional[torch.device] = None
-
+    
+    shape        : Optional[tuple[int, int]] = None
+    scale        : Any = None
+    offset       : Any = None
+    dtype        : torch.dtype = None
+    device       : Optional[torch.device] = None
+    non_blocking : bool = False
+    
     def __call__(self, pil_image):
-        t = torchvision.transforms.functional.pil_to_tensor(pil_image)
-        if self.result_shape is not None:
-            t = torchvision.transforms.functional.resize(t, size=self.result_shape)
-        if self.result_device is not None:
-            t = t.to(self.result_device)
-        t = t.to(self.result_dtype)
-        return t
+        
+        image_tensor = torchvision.transforms.functional.pil_to_tensor(pil_image)
+        
+        if self.shape is not None:
+            image_tensor = torchvision.transforms.functional.resize(image_tensor, size=self.shape)
+        
+        if image_tensor.shape[0] == 1:
+            image_tensor = image_tensor[0]
+        
+        if self.scale is not None:
+            image_tensor *= self.scale
+        
+        if self.offset is not None:
+            image_tensor += self.offset
+        
+        return image_tensor.to(dtype=self.dtype, device=self.device, non_blocking=self.non_blocking)
 
 
 def main():
@@ -65,19 +77,22 @@ def main():
         split='trainval',
         target_types='segmentation',
         transform=PILImageToTensorTransform(
-            result_dtype=torch.float32,
-            result_shape=net.input_shape,
-            result_device=device
+            shape=net.input_shape,
+            dtype=torch.float32,
+            device=device,
+            non_blocking=True
         ),
         target_transform=PILImageToTensorTransform(
-            result_dtype=torch.int64,
-            result_shape=net.output_shape,
-            result_device=device
+            shape=net.output_shape,
+            offset=-1,
+            dtype=torch.int64,
+            device=device,
+            non_blocking=True
         ),
         download=True
     )
     
-    trainval_dataloader = torch.utils.data.DataLoader(batch_size=64, shuffle=True, pin_memory=True)
+    trainval_dataloader = torch.utils.data.DataLoader(trainval_dataset, batch_size=64, shuffle=True, pin_memory=True)
     
     training_result = nt.NetTrainer(
         loss_applier=CrossEntropyLossApplier(),
