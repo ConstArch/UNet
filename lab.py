@@ -1,8 +1,9 @@
+from dataclasses import dataclass
+from typing      import Optional
+
 import numpy as np
-import cv2
 import torch
 import torchvision
-
 
 import net_training as nt
 import unet
@@ -36,32 +37,43 @@ class AdamOptimizerFactory(nt.AbstractOptimizerFactory):
         return torch.optim.Adam(**self.kwargs, params=parameters)
 
 
+@dataclass
+class PILImageToTensorTransform:
+
+    result_dtype  : torch.dtype
+    result_shape  : Optional[tuple[int, int]] = None
+    result_device : Optional[torch.device] = None
+
+    def __call__(self, pil_image):
+        t = torchvision.transforms.functional.pil_to_tensor(pil_image)
+        if self.result_shape is not None:
+            t = torchvision.transforms.functional.resize(t, size=self.result_shape)
+        if self.result_device is not None:
+            t = t.to(self.result_device)
+        t = t.to(self.result_dtype)
+        return t
+
+
 def main():
     
     device = torch.device('cuda')
     
     net = unet.UNet(output_channel_count=3, min_channel_shape=(20, 25)).to(device)
     
-    image_transform = torchvision.transforms.Compose(
-        [
-            torchvision.transforms.Resize(net.input_shape),
-            torchvision.transforms.ToTensor()
-        ]
-    )
-    
-    seg_map_transform = torchvision.transforms.Compose(
-        [
-            torchvision.transforms.Resize(net.output_shape),
-            torchvision.transforms.ToTensor()
-        ]
-    )
-    
     trainval_dataset = torchvision.datasets.OxfordIIITPet(
-        root='./data',
+        root='./',
         split='trainval',
         target_types='segmentation',
-        transform=image_transform,
-        target_transform=seg_map_transform,
+        transform=PILImageToTensorTransform(
+            result_dtype=torch.float32,
+            result_shape=net.input_shape,
+            result_device=device
+        ),
+        target_transform=PILImageToTensorTransform(
+            result_dtype=torch.int64,
+            result_shape=net.output_shape,
+            result_device=device
+        ),
         download=True
     )
     
