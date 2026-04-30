@@ -6,4 +6,4 @@ Module `net_training` repository: https://github.com/ConstArch/NetTrainingPlatfo
 
 Dataset: https://www.robots.ox.ac.uk/~vgg/data/pets
 
-Dataset downloads by `torchvision.datasets.OxfordIIITPet`. Use parameter `download=False` to cancel.
+The dataset is loaded automatically using `torchvision.datasets.OxfordIIITPet`. Use `download=False` to cancel.
