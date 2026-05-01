@@ -1,5 +1,5 @@
 Required
-- libraries: `numpy`, `torch`, `torchvision`;
+- libraries: `numpy`, `torch`, `torchvision`, `torchmetrics`, `matplotlib`;
 - module: `net_training`.
 
 Module `net_training` repository: https://github.com/ConstArch/NetTrainingPlatform
