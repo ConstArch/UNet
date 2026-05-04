@@ -283,8 +283,12 @@ def main():
     train_test_result = nt.NetTrainer(
         loss_applier=CrossEntropyLossApplier(),
         optimizer_factory=AdamOptimizerFactory(),
+        iteration_logger=nt.IterationLogger(
+            message_sender=lambda count, time, info: print(f'[{time}] iteration {count}: {info}'),
+            duration=1
+        )
         epoch_logger=nt.IterationLogger(
-            message_sender=lambda x, info: print(f'epoch {x} info: {info}'),
+            message_sender=lambda count, time, info: print(f'[{time}] epoch {count}: {info}'),
             duration=1
         )
     ).train_test(
@@ -297,12 +301,47 @@ def main():
     
     epoch_range = list(range(epoch_count))
     
-    plt.plot(epoch_range, train_test_result['train_loss_history'])
-    plt.plot(epoch_range, train_test_result[ 'test_loss_history'])
+    train_loss_history = train_test_result['train_loss_history']
+    test_loss_history  = train_test_result[ 'test_loss_history']
+    
+    train_iou_history = [ e['IoU'] for e in train_test_result['train_metric_history'] ]
+    test_iou_history  = [ e['IoU'] for e in train_test_result[ 'test_metric_history'] ]
+    train_soft_iou_history = [ e['SoftIoU'] for e in train_test_result['train_metric_history'] ]
+    test_soft_iou_history  = [ e['SoftIoU'] for e in train_test_result[ 'test_metric_history'] ]
+    
+    train_dice_history = [ e['Dice'] for e in train_test_result['train_metric_history'] ]
+    test_dice_history  = [ e['Dice'] for e in train_test_result[ 'test_metric_history'] ]
+    train_soft_dice_history = [ e['SoftDice'] for e in train_test_result['train_metric_history'] ]
+    test_soft_dice_history  = [ e['SoftDice'] for e in train_test_result[ 'test_metric_history'] ]
+    
+    train_haus_loss_history = [ e['HausdorffDTLoss'] for e in train_test_result['train_metric_history'] ]
+    test_haus_loss_history  = [ e['HausdorffDTLoss'] for e in train_test_result[ 'test_metric_history'] ]
+    
+    train_haus_dist_history = [ e['HausdorffDistance'] for e in train_test_result['train_metric_history'] ]
+    test_haus_dist_history  = [ e['HausdorffDistance'] for e in train_test_result[ 'test_metric_history'] ]
+    
+    plt.plot(epoch_range, train_loss_history)
+    plt.plot(epoch_range,  test_loss_history)
     plt.show()
     
-    plt.plot(epoch_range, train_test_result['train_metric_history'])
-    plt.plot(epoch_range, train_test_result[ 'test_metric_history'])
+    plt.plot(epoch_range, train_iou_history)
+    plt.plot(epoch_range,  test_iou_history)
+    plt.plot(epoch_range, train_soft_iou_history)
+    plt.plot(epoch_range,  test_soft_iou_history)
+    plt.show()
+    
+    plt.plot(epoch_range, train_dice_history)
+    plt.plot(epoch_range,  test_dice_history)
+    plt.plot(epoch_range, train_soft_dice_history)
+    plt.plot(epoch_range,  test_soft_dice_history)
+    plt.show()
+    
+    plt.plot(epoch_range, train_haus_loss_history)
+    plt.plot(epoch_range,  test_haus_loss_history)
+    plt.show()
+    
+    plt.plot(epoch_range, train_haus_dist_history)
+    plt.plot(epoch_range,  test_haus_dist_history)
     plt.show()
 
 
