@@ -1,55 +1,182 @@
 from dataclasses import dataclass
 from typing      import Any, Optional
 
-import numpy as np
 import torch
 import torchvision
-import torchmetrics
+import monai
 import matplotlib.pyplot as plt
 
 import net_training as nt
 import unet
 
 
+def to_dataloader_for_tuples(applier, net, dataloader):
+    
+    dataloader_len = len(dataloader)
+    dataset_len    = len(dataloader.dataset)
+    
+    losses  = torch.empty(dataloader_len, dtype=torch.float32)
+    weights = torch.empty(dataloader_len, dtype=torch.float32)
+    
+    for index, batch in enumerate(dataloader):
+        losses [index] = applier.to_batch(net, batch)
+        weights[index] = batch[0].shape[0] / dataset_len
+    
+    return losses @ weights
+
+
 class CrossEntropyLossApplier(nt.AbstractLossApplier):
     
     def __init__(self):
-        pass
+        self.loss = torch.nn.CrossEntropyLoss()
     
     def to_batch(self, net, batch):
         inputs, targets = batch
-        return torch.nn.functional.cross_entropy(net.forward(inputs), targets)
+        return self.loss(net.forward(inputs), targets)
     
     def to_dataloader(self, net, dataloader):
-        
-        N = len(dataloader)
-        
-        losses  = torch.empty(N, dtype=torch.float32)
-        weights = torch.empty(N, dtype=torch.float32)
-        
-        for index, batch in enumerate(dataloader):
-            losses [index] = self.to_batch(net, batch)
-            weights[index] = batch[0].shape[0] / N
-        
-        return losses @ weights
+        return to_dataloader_for_tuples(self, net, dataloader)
 
 
-class IoUMetricApplier:
+class MONAILossApplier(nt.AbstractLossApplier):
+    
+    def __init__(self, monai_loss):
+        self.loss = monai_loss
+    
+    def to_batch(self, net, batch):
+        
+        inputs, targets = batch
+        
+        targets_new_shape = (targets.shape[0], 1, targets.shape[1], targets.shape[2])
+        targets_one_hot = monai.networks.one_hot(targets.reshape(targets_new_shape), num_classes=3)
+        
+        return self.loss(net.forward(inputs), targets_one_hot)
+    
+    def to_dataloader(self, net, dataloader):
+        return to_dataloader_for_tuples(self, net, dataloader)
+
+
+class MONAIMetricApplier(nt.AbstractLossApplier):
+    
+    def __init__(self, monai_metric):
+        self.metric = monai_metric
+    
+    def to_batch(self, net, batch):
+        
+        inputs, targets = batch
+        
+        outputs_one_hot = monai.networks.one_hot(net.forward(inputs).argmax(dim=1, keepdim=True), num_classes=3)
+        
+        targets_new_shape = (targets.shape[0], 1, targets.shape[1], targets.shape[2])
+        targets_one_hot = monai.networks.one_hot(targets.reshape(targets_new_shape), num_classes=3)
+        
+        return self.metric(outputs_one_hot, targets_one_hot).mean()
+    
+    def to_dataloader(self, net, dataloader):
+        return to_dataloader_for_tuples(self, net, dataloader)
+
+
+class IoULossApplier(MONAILossApplier):
     
     def __init__(self):
-        pass
-    
-    def to_dataloader(self, net, dataloader):
-        pass
+        super().__init__(monai_loss=monai.losses.DiceLoss(softmax=True, jaccard=True))
 
 
-class DiceMetricApplier:
+class DiceLossApplier(MONAILossApplier):
     
     def __init__(self):
-        pass
+        super().__init__(monai_loss=monai.losses.DiceLoss(softmax=True))
+
+
+class HausdorffDistanceLossApplier(MONAILossApplier):
+    
+    def __init__(self):
+        super().__init__(monai_loss=monai.losses.HausdorffDTLoss(softmax=True))
+
+
+class IoUMetricApplier(MONAIMetricApplier):
+    
+    def __init__(self):
+        super().__init__(monai_metric=monai.metrics.MeanIoU())
+
+
+class DiceMetricApplier(MONAIMetricApplier):
+    
+    def __init__(self):
+        super().__init__(monai_metric=monai.metrics.DiceMetric())
+
+
+class HausdorffDistanceMetricApplier(MONAIMetricApplier):
+    
+    def __init__(self):
+        super().__init__(monai_metric=monai.metrics.HausdorffDistanceMetric())
+
+
+class AllMetricsApplier(nt.AbstractLossApplier):
+    
+    def __init__(self):
+        
+        self.miou_loss = monai.losses.DiceLoss(softmax=True, jaccard=True)
+        self.dice_loss = monai.losses.DiceLoss(softmax=True)
+        self.haus_loss = monai.losses.HausdorffDTLoss(softmax=True)
+        self.miou_metric = monai.metrics.MeanIoU()
+        self.dice_metric = monai.metrics.DiceMetric()
+        self.haus_metric = monai.metrics.HausdorffDistanceMetric()
+    
+    def to_batch(self, net, batch):
+        
+        inputs, targets = batch
+        
+        outputs = net.forward(inputs)
+        outputs_one_hot = monai.networks.one_hot(outputs.argmax(dim=1, keepdim=True), num_classes=3)
+        
+        targets_new_shape = (targets.shape[0], 1, targets.shape[1], targets.shape[2])
+        targets_one_hot = monai.networks.one_hot(targets.reshape(targets_new_shape), num_classes=3)
+        
+        return {
+            'SoftIoU'          : 1 - self.miou_loss(output, targets_one_hot),
+            'SoftDice'         : 1 - self.dice_loss(output, targets_one_hot),
+            'HausdorffDTLoss'  : self.haus_loss(output, targets_one_hot),
+            'IoU'              : self.miou_metric(outputs_one_hot, targets_one_hot).mean(),
+            'Dice'             : self.dice_metric(outputs_one_hot, targets_one_hot).mean(),
+            'HausdorffDistance': self.haus_metric(outputs_one_hot, targets_one_hot).mean()
+        }
     
     def to_dataloader(self, net, dataloader):
-        pass
+        
+        dataloader_len = len(dataloader)
+        dataset_len    = len(dataloader.dataset)
+        
+        soft_miou = torch.empty(dataloader_len, dtype=torch.float32)
+        soft_dice = torch.empty(dataloader_len, dtype=torch.float32)
+        haus_loss = torch.empty(dataloader_len, dtype=torch.float32)
+        miou      = torch.empty(dataloader_len, dtype=torch.float32)
+        dice      = torch.empty(dataloader_len, dtype=torch.float32)
+        haus_dist = torch.empty(dataloader_len, dtype=torch.float32)
+        
+        weights = torch.empty(dataloader_len, dtype=torch.float32)
+        
+        for i, batch in enumerate(dataloader):
+            
+            batch_result = self.to_batch(net, batch)
+            
+            soft_miou[i] = batch_result['SoftIoU']
+            soft_dice[i] = batch_result['SoftDice']
+            haus_loss[i] = batch_result['HausdorffDTLoss']
+            miou     [i] = batch_result['IoU']
+            dice     [i] = batch_result['Dice']
+            haus_dist[i] = batch_result['HausdorffDistance']
+            
+            weights[i] = batch[0].shape[0] / dataset_len
+        
+        return {
+            'SoftIoU'          : soft_miou @ weights,
+            'SoftDice'         : soft_dice @ weights,
+            'HausdorffDTLoss'  : haus_loss @ weights,
+            'IoU'              : miou      @ weights,
+            'Dice'             : dice      @ weights,
+            'HausdorffDistance': haus_dist @ weights
+        }
 
 
 class SGDOptimizerFactory(nt.AbstractOptimizerFactory):
@@ -157,7 +284,7 @@ def main():
         loss_applier=CrossEntropyLossApplier(),
         optimizer_factory=AdamOptimizerFactory(),
         epoch_logger=nt.IterationLogger(
-            message_sender=lambda x: print(f'epoch {x} completed'),
+            message_sender=lambda x, info: print(f'epoch {x} info: {info}'),
             duration=1
         )
     ).train_test(
@@ -165,7 +292,7 @@ def main():
         train_dataloader=trainval_dataloader,
         n_epochs=epoch_count,
         test_dataloader=test_dataloader,
-        metric_applier=DiceMetricApplier()
+        metric_applier=AllMetricsApplier()
     )
     
     epoch_range = list(range(epoch_count))
