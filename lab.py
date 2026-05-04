@@ -286,7 +286,7 @@ def main():
         iteration_logger=nt.IterationLogger(
             message_sender=lambda count, time, info: print(f'[{time}] iteration {count}: {info}'),
             duration=1
-        )
+        ),
         epoch_logger=nt.IterationLogger(
             message_sender=lambda count, time, info: print(f'[{time}] epoch {count}: {info}'),
             duration=1
