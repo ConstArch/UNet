@@ -74,14 +74,26 @@ class UNet(torch.nn.Module):
         
         p1, r1 = self.enc1(arg)
         p2, r2 = self.enc2(p1)
+        del p1
         p3, r3 = self.enc3(p2)
+        del p2
         p4, r4 = self.enc4(p3)
-        
+        del p3
         u4 = self.conv(p4)
-        
+        del p4
         u3 = self.dec4(u4, r4)
+        del u4
+        del r4
         u2 = self.dec3(u3, r3)
+        del u3
+        del r3
         u1 = self.dec2(u2, r2)
+        del u2
+        del r2
         res = self.dec1(u1, r1)
+        del u1
+        del r1
+        out = self.outp(res)
+        del res
         
-        return self.outp(res)
+        return out

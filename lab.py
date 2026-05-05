@@ -268,16 +268,24 @@ def main():
     
     trainval_dataloader = torch.utils.data.DataLoader(
         trainval_dataset,
-        batch_size=100,
+        batch_size=5,
         shuffle=True,
         #pin_memory=True
     )
     
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset,
-        batch_size=100,
+        batch_size=5,
         #pin_memory=True
     )
+    
+    def dict_format(d):
+        if isinstance(d, float):
+            return f'{d:.3f}'
+        elif isinstance(d, dict):
+            return '{ ' + ', '.join([f'{k}: {dict_format(v)}' for k, v in d.items()]) + ' }'
+        else:
+            return str(d)
     
     epoch_count = 10
     
@@ -285,11 +293,11 @@ def main():
         loss_applier=CrossEntropyLossApplier(),
         optimizer_factory=AdamOptimizerFactory(),
         iteration_logger=nt.IterationLogger(
-            message_sender=lambda count, time, info: print(f'[{time}] iteration {count}: {info}'),
+            message_sender=lambda count, time, info: print(f'[{time:%Y-%m-%d %H:%M:%S}] iteration {count}: {dict_format(info)}'),
             duration=1
         ),
         epoch_logger=nt.IterationLogger(
-            message_sender=lambda count, time, info: print(f'[{time}] epoch {count}: {info}'),
+            message_sender=lambda count, time, info: print(f'[{time:%Y-%m-%d %H:%M:%S}] epoch {count}: {dict_format(info)}'),
             duration=1
         )
     ).train_test(
