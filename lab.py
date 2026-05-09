@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing      import Any, Optional
 
+import pathlib
+
 import torch
 import torchvision
 import monai
@@ -227,7 +229,10 @@ class PILImageToTensorTransform:
         return image_tensor.to(dtype=self.dtype, device=self.device, non_blocking=self.non_blocking)
 
 
-def main():
+def main(output_dir='./'):
+    
+    if not isinstance(output_dir, pathlib.Path):
+        output_dir = pathlib.Path(output_dir)
     
     device = torch.device('cuda')
     
@@ -288,6 +293,7 @@ def main():
             return str(d)
     
     epoch_count = 10
+    loss_name = 'CrossEntropyLoss'
     
     train_test_result = nt.NetTrainer(
         loss_applier=CrossEntropyLossApplier(),
@@ -305,7 +311,9 @@ def main():
         train_dataloader=trainval_dataloader,
         n_epochs=epoch_count,
         test_dataloader=test_dataloader,
-        metric_applier=AllMetricsApplier()
+        metric_applier=AllMetricsApplier(),
+        #gc_collect=True,
+        #cuda_cache_clear=True
     )
     
     epoch_range = list(range(epoch_count))
@@ -329,29 +337,34 @@ def main():
     train_haus_dist_history = [ e['HausdorffDistance'] for e in train_test_result['train_metric_history'] ]
     test_haus_dist_history  = [ e['HausdorffDistance'] for e in train_test_result[ 'test_metric_history'] ]
     
-    plt.plot(epoch_range, train_loss_history)
-    plt.plot(epoch_range,  test_loss_history)
-    plt.show()
+    plt.plot(epoch_range, train_loss_history, label='train loss')
+    plt.plot(epoch_range,  test_loss_history, label= 'test loss')
+    plt.legend()
+    plt.savefig(output_dir/f'{loss_name}.png')
     
-    plt.plot(epoch_range, train_iou_history)
-    plt.plot(epoch_range,  test_iou_history)
-    plt.plot(epoch_range, train_soft_iou_history)
-    plt.plot(epoch_range,  test_soft_iou_history)
-    plt.show()
+    plt.plot(epoch_range,      train_iou_history, label='train IoU')
+    plt.plot(epoch_range,       test_iou_history, label= 'test IoU')
+    plt.plot(epoch_range, train_soft_iou_history, label='train soft IoU')
+    plt.plot(epoch_range,  test_soft_iou_history, label= 'test soft IoU')
+    plt.legend()
+    plt.savefig(output_dir/'metrics'/'IoU.png')
     
-    plt.plot(epoch_range, train_dice_history)
-    plt.plot(epoch_range,  test_dice_history)
-    plt.plot(epoch_range, train_soft_dice_history)
-    plt.plot(epoch_range,  test_soft_dice_history)
-    plt.show()
+    plt.plot(epoch_range,      train_dice_history, label='train Dice')
+    plt.plot(epoch_range,       test_dice_history, label= 'test Dice')
+    plt.plot(epoch_range, train_soft_dice_history, label='train soft Dice')
+    plt.plot(epoch_range,  test_soft_dice_history, label= 'test soft Dice')
+    plt.legend()
+    plt.savefig(output_dir/'metrics'/'Dice.png')
     
-    plt.plot(epoch_range, train_haus_loss_history)
-    plt.plot(epoch_range,  test_haus_loss_history)
-    plt.show()
+    plt.plot(epoch_range, train_haus_loss_history, label='train Hausdorff DT loss')
+    plt.plot(epoch_range,  test_haus_loss_history, label= 'test Hausdorff DT loss')
+    plt.legend()
+    plt.savefig(output_dir/'metrics'/'HausdorffDTLoss.png')
     
-    plt.plot(epoch_range, train_haus_dist_history)
-    plt.plot(epoch_range,  test_haus_dist_history)
-    plt.show()
+    plt.plot(epoch_range, train_haus_dist_history, label='train Hausdorff distance')
+    plt.plot(epoch_range,  test_haus_dist_history, label= 'test Hausdorff distance')
+    plt.legend()
+    plt.savefig(output_dir/'metrics'/'HausdorffDistance.png')
 
 
 if __name__ == '__main__':
