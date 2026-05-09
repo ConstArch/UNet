@@ -137,9 +137,9 @@ class AllMetricsApplier(nt.AbstractLossApplier):
         targets_one_hot_cpu = targets_one_hot.cpu()
         
         return {
-            'SoftIoU'          : 1 - self.miou_loss(output, targets_one_hot),
-            'SoftDice'         : 1 - self.dice_loss(output, targets_one_hot),
-            'HausdorffDTLoss'  : self.haus_loss(output.cpu(), targets_one_hot_cpu),
+            'SoftIoU'          : 1 - self.miou_loss(outputs, targets_one_hot),
+            'SoftDice'         : 1 - self.dice_loss(outputs, targets_one_hot),
+            'HausdorffDTLoss'  : self.haus_loss(outputs.cpu(), targets_one_hot_cpu),
             'IoU'              : self.miou_metric(outputs_one_hot, targets_one_hot).mean(),
             'Dice'             : self.dice_metric(outputs_one_hot, targets_one_hot).mean(),
             'HausdorffDistance': self.haus_metric(outputs_one_hot.cpu(), targets_one_hot_cpu).mean()
